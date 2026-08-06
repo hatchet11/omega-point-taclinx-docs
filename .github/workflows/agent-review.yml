@@ -35,15 +35,16 @@ jobs:
           # The app's token exchange 401s here; the permissions block above
           # already grants what the action needs.
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_bots: "dependabot[bot]"
           track_progress: true
           claude_args: '{"allowedTools":["Read","Glob","Grep","Bash(git diff:*)","Bash(git log:*)"]}'
           prompt: |
-            Review the diff on this pull request. Read-only â€” do not edit files
+            Review the diff on this pull request. Read-only — do not edit files
             and do not push.
 
             Rank findings by blast radius, in this order:
 
-            1. Auth, session, or access-control logic that fails OPEN â€” access
+            1. Auth, session, or access-control logic that fails OPEN — access
                granted because a check threw, a field was absent, a lookup
                returned nothing, or a catch swallowed the error.
             2. Secret or credential exposure: a key or token reaching a log, a
@@ -59,3 +60,4 @@ jobs:
 
             Skip style, naming, and formatting. Do not praise. If the diff is
             clean, say so in one line.
+
