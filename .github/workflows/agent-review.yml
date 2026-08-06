@@ -1,0 +1,61 @@
+# Agent loop: PR -> REVIEW.
+#
+# Advisory only. It comments; it does not approve, block, or push. CI stays
+# the thing that gates the merge.
+name: agent-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+permissions:
+  # claude-code-action mints its GitHub App token via OIDC.
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: agent-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1.0.186
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Use the workflow's own token rather than the Claude GitHub App.
+          # The app's token exchange 401s here; the permissions block above
+          # already grants what the action needs.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          track_progress: true
+          claude_args: '{"allowedTools":["Read","Glob","Grep","Bash(git diff:*)","Bash(git log:*)"]}'
+          prompt: |
+            Review the diff on this pull request. Read-only — do not edit files
+            and do not push.
+
+            Rank findings by blast radius, in this order:
+
+            1. Auth, session, or access-control logic that fails OPEN — access
+               granted because a check threw, a field was absent, a lookup
+               returned nothing, or a catch swallowed the error.
+            2. Secret or credential exposure: a key or token reaching a log, a
+               URL, an error body, or the repository itself.
+            3. Missing tenant/user scoping on a database query, or an endpoint
+               reachable without the ownership check its neighbours apply.
+            4. Correctness bugs with a concrete failing input.
+            5. Tests that assert nothing, or were weakened to pass.
+
+            For each finding give file:line, what breaks, and the input that
+            breaks it. If you cannot name the input, say the finding is
+            unconfirmed rather than dressing it up.
+
+            Skip style, naming, and formatting. Do not praise. If the diff is
+            clean, say so in one line.
